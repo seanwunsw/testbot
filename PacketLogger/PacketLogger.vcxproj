@@ -56,8 +56,8 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
-    <IncludePath>D:\Programming\Libraries\PolyHook_2_0;$(IncludePath)</IncludePath>
-    <LibraryPath>D:\Programming\Libraries\PolyHook_2_0\build32;D:\Programming\Libraries\PolyHook_2_0\build32\capstone;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(SolutionDir)PacketLogger\vcpkg_installed\x86-windows\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)PacketLogger\vcpkg_installed\x86-windows\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <Target Name="QtMsBuildNotFound" BeforeTargets="CustomBuild;ClCompile" Condition="!Exists('$(QtMsBuild)\qt.targets') or !Exists('$(QtMsBuild)\qt.props')">
     <Message Importance="High" Text="QtMsBuild: could not locate qt.targets, qt.props; project may not build correctly." />
@@ -223,7 +223,7 @@
       <OutputFile>$(OutDir)\$(ProjectName).dll</OutputFile>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>false</GenerateDebugInformation>
-      <AdditionalDependencies>PolyHook_2.lib;capstone_dll.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>PolyHook_2.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <TargetMachine>MachineX86</TargetMachine>
       <AdditionalOptions> /SUBSYSTEM:WINDOWS /NODEFAULTLIB:LIBCMT</AdditionalOptions>
     </Link>

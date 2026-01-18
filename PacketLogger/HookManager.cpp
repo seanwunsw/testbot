@@ -3,13 +3,9 @@
 #include "Memory.h"
 
 #include <polyhook2/Detour/x86Detour.hpp>
-#include <polyhook2/CapstoneDisassembler.hpp>
 
 #include <iostream>
 #include <Windows.h>
-
-
-PLH::CapstoneDisassembler g_oCapstoneDisasm(PLH::Mode::x86);
 
 std::function<bool(char *i_szPacket)> g_pRecvCallback;
 PLH::x86Detour *g_pRecvDetour = nullptr;
@@ -20,62 +16,86 @@ PLH::x86Detour *g_pSendDetour = nullptr;
 uint64 g_iSendTrampoline;
 
 
-void RecvPacketHook() {
-	static char *s_szPacket;
-
-	__asm {
-		pushad
-		pushfd
-		mov s_szPacket, edx
+void RecvPacketHelper(char* packet) {
+	if (g_pRecvCallback(packet)) {
+		packet[0] = 0x00;
 	}
-
-	if (g_pRecvCallback(s_szPacket)) { 
-		s_szPacket[0] = 0x00;
-	}
-
-	__asm {
-		popfd
-		popad
-	}
-
-	PLH::FnCast(g_iRecvTrampoline, &RecvPacketHook)();
 }
 
-void SendPacketHook() {
-	static char *s_szPacket;
-
+void __declspec(naked) RecvPacketHook() {
 	__asm {
+		// Save context
 		pushad
 		pushfd
-		mov s_szPacket, edx
-	}
 
-	bool fBlockPacket = g_pSendCallback(s_szPacket);
-	
-	__asm {
+		// Get packet from EDX, push as argument for helper
+		mov eax, edx
+		push eax
+
+		// Call helper
+		call RecvPacketHelper
+		add esp, 4
+
+		// Restore context and jump to original
 		popfd
 		popad
+		jmp dword ptr [g_iRecvTrampoline]
 	}
-	
-	if (fBlockPacket) {
-		return;
-	}
-
-	PLH::FnCast(g_iSendTrampoline, &SendPacketHook)();
 }
 
+bool SendPacketHelper(char* packet) {
+	return g_pSendCallback(packet);
+}
+
+void __declspec(naked) SendPacketHook() {
+	__asm {
+		// Save context
+		pushad
+		pushfd
+
+		// Get packet from EDX, push as argument for helper
+		mov eax, edx
+		push eax
+
+		// Call helper
+		call SendPacketHelper
+		add esp, 4
+
+		// Check return value in AL
+		test al, al
+		jz send_packet // If AL is zero (false), jump to send_packet label
+
+		// --- Packet IS blocked ---
+		popfd
+		popad
+		ret
+
+	send_packet:
+		// --- Packet is NOT blocked ---
+		popfd
+		popad
+		jmp dword ptr [g_iSendTrampoline]
+	}
+}
 
 void HookManager::Initialize(std::function<bool(char *i_szPacket)> i_pRecvCallback, std::function<bool(char *i_szPacket)> i_pSendCallback)
 {
 	if (!g_pRecvDetour) {
 		g_pRecvCallback = i_pRecvCallback;
-		g_pRecvDetour = new PLH::x86Detour(static_cast<uint64>(AddressManager::Get(EAddress::ARecvHook)), reinterpret_cast<uint64>(&RecvPacketHook), &g_iRecvTrampoline, g_oCapstoneDisasm);
+		g_pRecvDetour = new PLH::x86Detour(
+			static_cast<uint64_t>(AddressManager::Get(EAddress::ARecvHook)),
+			reinterpret_cast<uint64_t>(&RecvPacketHook),
+			&g_iRecvTrampoline
+		);
 		g_pRecvDetour->hook();
 	}
 
 	if (!g_pSendDetour) {
 		g_pSendCallback = i_pSendCallback;
-		g_pSendDetour = new PLH::x86Detour(static_cast<uint64>(AddressManager::Get(EAddress::ASendHook)), reinterpret_cast<uint64>(&SendPacketHook), &g_iSendTrampoline, g_oCapstoneDisasm);
+		g_pSendDetour = new PLH::x86Detour(
+			static_cast<uint64_t>(AddressManager::Get(EAddress::ASendHook)), 
+			reinterpret_cast<uint64_t>(&SendPacketHook), 
+			&g_iSendTrampoline);
 		g_pSendDetour->hook();
 	}
 }
